@@ -1,0 +1,19 @@
+# Root App: App of Apps pattern — quản lý tất cả child applications của LAB2
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: lab2-root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/trungctde180766/LAB2W10.git
+    path: argocd/apps
+    targetRevision: main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

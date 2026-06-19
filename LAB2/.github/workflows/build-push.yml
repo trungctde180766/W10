@@ -1,0 +1,127 @@
+# LAB 2.2 - CI: Build → Trivy scan → Cosign sign → Push
+# Flow: Trivy fail nếu CVE HIGH/CRITICAL → Cosign ký sau khi pass → push lên registry
+# trigger: regenerate cosign key pair
+name: Build, Scan, Sign and Push
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/api/**'
+      - '.github/workflows/build-push.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/lab2-api
+
+jobs:
+  build-scan-sign:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write   # cần cho cosign keyless (nếu dùng keyless OIDC)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Tính version ────────────────────────────────────────────────────────
+      - name: Calculate semantic version
+        id: semver
+        uses: paulhatch/semantic-version@v5.4.0
+        with:
+          tag_prefix: "v"
+          major_pattern: "(BREAKING CHANGE:|!:)"
+          minor_pattern: "^feat"
+          version_format: "${major}.${minor}.${patch}"
+          bump_each_commit: false
+
+      # ── Login registry ───────────────────────────────────────────────────────
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Build image (chưa push) ──────────────────────────────────────────────
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./src/api
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          load: true    # load vào docker daemon để Trivy scan local
+
+      # ── STEP A: Trivy scan ───────────────────────────────────────────────────
+      # exit-code 1 → pipeline đỏ nếu có CVE HIGH hoặc CRITICAL
+      # CVE vendor chưa fix → ghi exception ADR (xem runbooks/exception-adr.md)
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: false         # đổi true nếu muốn bỏ qua CVE chưa có patch
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          # Để exception CVE cụ thể: tạo file .trivyignore với CVE ID
+          trivyignores: .trivyignore
+
+      # ── STEP B: Cosign sign ──────────────────────────────────────────────────
+      # Chỉ chạy nếu Trivy pass (exit-code 0)
+      # Ký bằng SHA tag (không dùng :latest) → admission verify đúng image
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@main
+
+      - name: Push image trước khi ký
+        run: docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Cosign sign image with private key
+        run: |
+          cosign sign --key env://COSIGN_KEY \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+        # Signature tự động push vào registry cạnh image
+
+      # ── Tag thêm với version + latest ────────────────────────────────────────
+      - name: Tag and push version
+        run: |
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.semver.outputs.version }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.semver.outputs.version }}
+          # Ký thêm tag version
+          cosign sign --key env://COSIGN_KEY \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.semver.outputs.version }}
+        env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+
+      # ── Update rollout manifest ───────────────────────────────────────────────
+      - name: Update rollout.yaml with new version
+        run: |
+          sed -i "s|image: ghcr.io/.*/lab2-api:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.semver.outputs.version }}|g" app-payments/rollout.yaml
+
+      - name: Commit and push version update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app-payments/rollout.yaml
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: bump version to v${{ steps.semver.outputs.version }}"
+            git push
+          fi
+
+      - name: Create git tag
+        run: |
+          git tag v${{ steps.semver.outputs.version }} || true
+          git push origin v${{ steps.semver.outputs.version }} || true

@@ -1,0 +1,172 @@
+# Tất cả ConstraintTemplate — phải apply TRƯỚC Constraint
+# ArgoCD app: gatekeeper-templates (wave 0)
+# Sau khi apply xong, Kubernetes tạo CRD cho từng loại Constraint
+
+---
+# F-01: Cấm image tag :latest
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sblocklatestimage
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sBlockLatestImage
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+    rego: |
+      package k8sblocklatestimage
+
+      violation[{"msg": msg}] {
+        container := input_containers[_]
+        endswith(container.image, ":latest")
+        msg := sprintf("Container '%v' dùng tag :latest — bị cấm. Dùng tag version cụ thể.", [container.name])
+      }
+
+      violation[{"msg": msg}] {
+        container := input_containers[_]
+        not contains(container.image, ":")
+        msg := sprintf("Container '%v' không có tag — mặc định :latest bị cấm.", [container.name])
+      }
+
+      input_containers[c] { c := input.review.object.spec.containers[_] }
+      input_containers[c] { c := input.review.object.spec.initContainers[_] }
+      input_containers[c] { c := input.review.object.spec.template.spec.containers[_] }
+      input_containers[c] { c := input.review.object.spec.template.spec.initContainers[_] }
+
+---
+# F-02: Bắt buộc resources.limits
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequirelimits
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequireLimits
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+    rego: |
+      package k8srequirelimits
+
+      violation[{"msg": msg}] {
+        container := input_containers[_]
+        not container.resources.limits
+        msg := sprintf("Container '%v' thiếu resources.limits — bắt buộc khai báo.", [container.name])
+      }
+
+      violation[{"msg": msg}] {
+        container := input_containers[_]
+        container.resources.limits
+        not container.resources.limits.cpu
+        msg := sprintf("Container '%v' thiếu resources.limits.cpu.", [container.name])
+      }
+
+      violation[{"msg": msg}] {
+        container := input_containers[_]
+        container.resources.limits
+        not container.resources.limits.memory
+        msg := sprintf("Container '%v' thiếu resources.limits.memory.", [container.name])
+      }
+
+      input_containers[c] { c := input.review.object.spec.containers[_] }
+      input_containers[c] { c := input.review.object.spec.template.spec.containers[_] }
+
+---
+# F-04: Cấm runAsUser: 0
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8snorunasroot
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sNoRunAsRoot
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+    rego: |
+      package k8snorunasroot
+
+      violation[{"msg": msg}] {
+        container := input_containers[_]
+        container.securityContext.runAsUser == 0
+        msg := sprintf("Container '%v' set runAsUser: 0 (root) — bị cấm.", [container.name])
+      }
+
+      violation[{"msg": msg}] {
+        spec := input.review.object.spec.template.spec
+        spec.securityContext.runAsUser == 0
+        msg := "Pod securityContext runAsUser: 0 (root) — bị cấm."
+      }
+
+      input_containers[c] { c := input.review.object.spec.containers[_] }
+      input_containers[c] { c := input.review.object.spec.template.spec.containers[_] }
+
+---
+# Cấm hostNetwork: true
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8snohostnetwork
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sNoHostNetwork
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+    rego: |
+      package k8snohostnetwork
+
+      violation[{"msg": msg}] {
+        input.review.object.spec.template.spec.hostNetwork == true
+        msg := "hostNetwork: true bị cấm."
+      }
+
+      violation[{"msg": msg}] {
+        input.review.object.spec.hostNetwork == true
+        msg := "hostNetwork: true bị cấm."
+      }
+
+---
+# Lab 1.3 - Custom: Whitelist registry
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sallowedregistry
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sAllowedRegistry
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            allowedPrefixes:
+              type: array
+              items:
+                type: string
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+    rego: |
+      package k8sallowedregistry
+
+      violation[{"msg": msg}] {
+        container := input_containers[_]
+        not allowed_registry(container.image)
+        msg := sprintf("Container '%v' dùng image '%v' từ registry không được phép. Chỉ cho phép: %v", [
+          container.name, container.image, input.parameters.allowedPrefixes,
+        ])
+      }
+
+      allowed_registry(image) {
+        prefix := input.parameters.allowedPrefixes[_]
+        startswith(image, prefix)
+      }
+
+      input_containers[c] { c := input.review.object.spec.containers[_] }
+      input_containers[c] { c := input.review.object.spec.template.spec.containers[_] }

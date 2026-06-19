@@ -1,0 +1,25 @@
+# ArgoCD App: Sync SecretStore + ExternalSecret (eso/ folder)
+# sync-wave 0: SAU khi ESO operator đã cài xong (wave -3)
+# Tách thành App riêng để tránh race condition với CRD chưa tạo
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: eso-config
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/trungctde180766/LAB2W10.git
+    path: eso
+    targetRevision: main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true

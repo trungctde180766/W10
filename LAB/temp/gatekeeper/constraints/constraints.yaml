@@ -1,0 +1,70 @@
+# Tất cả Constraint — apply SAU khi ConstraintTemplate đã tạo xong CRD
+# ArgoCD app: gatekeeper-constraints (wave 1)
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sBlockLatestImage
+metadata:
+  name: block-latest-image
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+    - apiGroups: ["apps", "argoproj.io"]
+      kinds: ["Deployment", "StatefulSet", "DaemonSet", "Rollout"]
+    namespaces: ["demo"]
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireLimits
+metadata:
+  name: require-resource-limits
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+    - apiGroups: ["apps", "argoproj.io"]
+      kinds: ["Deployment", "StatefulSet", "DaemonSet", "Rollout"]
+    namespaces: ["demo"]
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sNoRunAsRoot
+metadata:
+  name: no-run-as-root
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+    - apiGroups: ["apps", "argoproj.io"]
+      kinds: ["Deployment", "StatefulSet", "DaemonSet", "Rollout"]
+    namespaces: ["demo"]
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sNoHostNetwork
+metadata:
+  name: no-host-network
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+    - apiGroups: ["", "apps", "argoproj.io"]
+      kinds: ["Pod", "Deployment", "StatefulSet", "DaemonSet", "Rollout"]
+    namespaces: ["demo"]
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sAllowedRegistry
+metadata:
+  name: allowed-registry
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+    - apiGroups: ["apps", "argoproj.io"]
+      kinds: ["Deployment", "StatefulSet", "DaemonSet", "Rollout"]
+    namespaces: ["demo"]
+  parameters:
+    allowedPrefixes:
+    - "ghcr.io/trungctde180766/"

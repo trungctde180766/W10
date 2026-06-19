@@ -1,0 +1,12 @@
+# LAB 2.3 - Namespace payments
+# Label policy.sigstore.dev/include=true → Policy Controller enforce verify ký
+# Gatekeeper tự động áp guardrail cũ lên namespace này (không cần viết luật mới)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: payments
+  labels:
+    # Kích hoạt Sigstore Policy Controller enforce trên namespace này
+    policy.sigstore.dev/include: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"

@@ -1,0 +1,33 @@
+# LAB 2 - .gitignore
+# KHÔNG commit bất kỳ credential nào vào git
+
+# Cosign private key
+cosign.key
+*.key
+!cosign.pub           # public key được phép commit
+
+# AWS credentials
+aws-credentials.yaml
+*credentials*.yaml
+*credentials*.json
+
+# K8s secrets (tạo bằng kubectl create secret, không commit)
+*-secret.yaml
+!*-secret.yaml.example  # example files được phép
+
+# Terraform state (nếu có)
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# Environment files
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Executables
+cosign.exe
+*.exe

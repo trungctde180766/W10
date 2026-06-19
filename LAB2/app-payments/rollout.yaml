@@ -1,0 +1,69 @@
+# LAB 2.3 - App team B: Rollout cho payments service
+# Kế thừa guardrail cũ (Gatekeeper sẽ tự block nếu vi phạm)
+# Image phải được ký → Policy Controller verify trước khi deploy
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: payments-api
+  namespace: payments
+  labels:
+    app: payments-api
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payments-api
+  template:
+    metadata:
+      labels:
+        app: payments-api
+    spec:
+      # securityContext: không runAsRoot (Gatekeeper K8sNoRunAsRoot)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: payments-api
+        # Image phải:
+        # 1. Từ registry được phép (K8sAllowedRegistry)
+        # 2. Không dùng :latest (K8sBlockLatestImage)
+        # 3. Đã được ký bằng cosign (Policy Controller)
+        # 4. Có resource limits (K8sRequireLimits)
+        image: ghcr.io/trungctde180766/lab2-api:0.0.1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: VERSION
+          value: "v0.0.1"
+        - name: DB_PASSWORD
+          # Đọc từ K8s Secret được ESO tạo (không hardcode)
+          valueFrom:
+            secretKeyRef:
+              name: db-password
+              key: password
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+  strategy:
+    canary:
+      steps:
+      - setWeight: 20
+      - pause: {duration: 1m}
+      - setWeight: 100

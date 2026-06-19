@@ -1,0 +1,78 @@
+# LAB 2.3 - NetworkPolicy: cô lập namespace payments
+# Yêu cầu minikube chạy với: --cni=calico để enforce NetworkPolicy
+#
+# Kiểm chứng:
+#   Pod trong payments gọi service api của demo → bị chặn (egress deny)
+#   Pod trong demo gọi service trong payments → bị chặn (ingress deny)
+#   Pod trong payments gọi pod khác trong payments → cho phép
+#   Pod trong payments gọi kube-dns (UDP/TCP 53) → cho phép (cần DNS)
+
+---
+# 1. Default-deny tất cả ingress vào payments
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: payments
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector: {}       # áp cho tất cả pod trong ns payments
+  policyTypes:
+  - Ingress
+
+---
+# 2. Cho phép ingress nội bộ (payments → payments)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-intra-namespace
+  namespace: payments
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector: {}   # chỉ pod trong cùng namespace (không có namespaceSelector)
+
+---
+# 3. Default-deny tất cả egress từ payments
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: payments
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+
+---
+# 4. Cho phép egress: DNS (kube-dns) + nội bộ payments
+# Không cho phép egress sang namespace demo → chặn payments gọi service api của demo
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-dns-and-intra
+  namespace: payments
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  # Cho phép DNS
+  - ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Cho phép egress nội bộ payments
+  - to:
+    - podSelector: {}

@@ -1,0 +1,25 @@
+# ArgoCD App: Deploy toàn bộ resource cho team payments
+# sync-wave 1: SAU khi namespace + guardrail đã có
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-payments
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/trungctde180766/LAB2W10.git
+    path: app-payments
+    targetRevision: main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: payments
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true

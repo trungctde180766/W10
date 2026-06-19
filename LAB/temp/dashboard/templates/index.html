@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>K8s Admin Control Panel</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d2e; --border: #2a2d3e;
+    --primary: #6c63ff; --success: #00d4aa; --danger: #ff4757;
+    --warning: #ffa502; --text: #e2e8f0; --muted: #64748b;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Segoe UI',sans-serif; min-height:100vh; }
+  header { background:var(--card); border-bottom:1px solid var(--border); padding:16px 32px;
+           display:flex; align-items:center; gap:16px; }
+  header h1 { font-size:20px; font-weight:700; }
+  header span { color:var(--muted); font-size:13px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--success); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .layout { display:grid; grid-template-columns:220px 1fr; min-height:calc(100vh - 57px); }
+  nav { background:var(--card); border-right:1px solid var(--border); padding:24px 0; }
+  nav a { display:flex; align-items:center; gap:12px; padding:12px 24px; color:var(--muted);
+          text-decoration:none; font-size:14px; cursor:pointer; transition:.2s; }
+  nav a:hover, nav a.active { color:var(--text); background:rgba(108,99,255,.15); border-right:3px solid var(--primary); }
+  nav .nav-icon { font-size:18px; width:20px; text-align:center; }
+  main { padding:32px; overflow-y:auto; }
+  .section { display:none; }
+  .section.active { display:block; }
+  h2 { font-size:18px; font-weight:600; margin-bottom:20px; display:flex; align-items:center; gap:10px; }
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; }
+  .card-title { font-size:13px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.5px; }
+  .card-value { font-size:28px; font-weight:700; }
+  .btn { padding:10px 20px; border-radius:8px; border:none; cursor:pointer; font-size:14px;
+         font-weight:600; transition:.2s; display:inline-flex; align-items:center; gap:8px; }
+  .btn:hover { filter:brightness(1.15); transform:translateY(-1px); }
+  .btn:active { transform:translateY(0); }
+  .btn-primary { background:var(--primary); color:#fff; }
+  .btn-success { background:var(--success); color:#000; }
+  .btn-danger  { background:var(--danger);  color:#fff; }
+  .btn-warning { background:var(--warning); color:#000; }
+  .btn-ghost   { background:transparent; color:var(--text); border:1px solid var(--border); }
+  .btn-sm { padding:6px 14px; font-size:13px; }
+  .badge { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+  .badge-success { background:rgba(0,212,170,.15); color:var(--success); }
+  .badge-danger  { background:rgba(255,71,87,.15);  color:var(--danger); }
+  .badge-warning { background:rgba(255,165,2,.15);  color:var(--warning); }
+  .badge-muted   { background:rgba(100,116,139,.15);color:var(--muted); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th { text-align:left; padding:12px 16px; color:var(--muted); font-size:12px;
+       text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--border); }
+  td { padding:12px 16px; border-bottom:1px solid rgba(42,45,62,.5); }
+  tr:hover td { background:rgba(108,99,255,.05); }
+  .result-box { background:#0d1117; border:1px solid var(--border); border-radius:8px;
+                padding:16px; font-family:monospace; font-size:13px; min-height:80px;
+                white-space:pre-wrap; color:#a8ff78; margin-top:16px; max-height:300px; overflow-y:auto; }
+  .result-box.error { color:var(--danger); }
+  .divider { border:none; border-top:1px solid var(--border); margin:24px 0; }
+  .input-row { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+  input[type=range] { width:200px; accent-color:var(--primary); }
+  .range-val { font-weight:700; color:var(--primary); min-width:45px; }
+  .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.3);
+             border-top-color:#fff; border-radius:50%; animation:spin .6s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .test-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+  .test-card { background:#0d1117; border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .test-card h4 { font-size:13px; margin-bottom:10px; }
+  .canary-bar { background:var(--border); border-radius:20px; height:12px; overflow:hidden; margin:8px 0; }
+  .canary-fill { height:100%; background:linear-gradient(90deg,var(--primary),var(--success)); border-radius:20px; transition:.5s; }
+  .tag { background:rgba(108,99,255,.2); color:var(--primary); padding:2px 8px; border-radius:4px; font-size:11px; }
+  #toast { position:fixed; bottom:24px; right:24px; background:var(--card); border:1px solid var(--border);
+           border-radius:10px; padding:14px 20px; font-size:14px; opacity:0; transition:.3s; pointer-events:none; z-index:999; }
+  #toast.show { opacity:1; }
+  .refresh-btn { margin-left:auto; }
+  select { background:var(--card); color:var(--text); border:1px solid var(--border);
+           border-radius:8px; padding:8px 14px; font-size:14px; outline:none; }
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+<header>
+  <div class="dot"></div>
+  <h1>⚡ K8s Admin Control Panel</h1>
+  <span>cluster: w10 &nbsp;|&nbsp; namespace: demo</span>
+  <button class="btn btn-ghost btn-sm refresh-btn" onclick="refreshAll()">🔄 Refresh</button>
+</header>
+
+<div class="layout">
+<nav>
+  <a class="active" onclick="show('overview')"  ><span class="nav-icon">🏠</span> Overview</a>
+  <a onclick="show('argocd')"   ><span class="nav-icon">🔄</span> ArgoCD Apps</a>
+  <a onclick="show('rbac')"     ><span class="nav-icon">🔐</span> RBAC Check</a>
+  <a onclick="show('gatekeeper')"><span class="nav-icon">🛡️</span> Gatekeeper</a>
+  <a onclick="show('canary')"   ><span class="nav-icon">🐦</span> Canary Rollout</a>
+  <a onclick="show('pods')"     ><span class="nav-icon">📦</span> Pods</a>
+  <a onclick="show('git')"      ><span class="nav-icon">📝</span> Git Log</a>
+  <a onclick="show('slo')"      ><span class="nav-icon">📊</span> SLO & Alerts</a>
+</nav>
+
+<main>
+
+<!-- ═══════════════════ OVERVIEW ═══════════════════ -->
+<div id="overview" class="section active">
+  <h2>🏠 Cluster Overview</h2>
+  <div class="grid-3" id="stat-cards">
+    <div class="card"><div class="card-title">Total Apps</div><div class="card-value" id="stat-apps">—</div></div>
+    <div class="card"><div class="card-title">Healthy Apps</div><div class="card-value" id="stat-healthy" style="color:var(--success)">—</div></div>
+    <div class="card"><div class="card-title">Running Pods</div><div class="card-value" id="stat-pods" style="color:var(--primary)">—</div></div>
+    <div class="card"><div class="card-title">API Rollout</div><div class="card-value" id="stat-rollout" style="font-size:18px">—</div></div>
+    <div class="card"><div class="card-title">Canary Step</div><div class="card-value" id="stat-step">—</div></div>
+    <div class="card"><div class="card-title">Nodes</div><div class="card-value" id="stat-nodes" style="color:var(--success)">—</div></div>
+  </div>
+  <hr class="divider">
+  <h2>📋 Recent Git Commits</h2>
+  <div id="git-overview" class="result-box" style="color:var(--text)">Loading...</div>
+</div>
+
+<!-- ═══════════════════ ARGOCD ═══════════════════ -->
+<div id="argocd" class="section">
+  <h2>🔄 ArgoCD Applications
+    <button class="btn btn-ghost btn-sm" onclick="loadApps()">🔄 Refresh</button>
+  </h2>
+  <table>
+    <thead><tr><th>App Name</th><th>Sync Status</th><th>Health</th><th>Action</th></tr></thead>
+    <tbody id="apps-table"><tr><td colspan="4" style="color:var(--muted)">Loading...</td></tr></tbody>
+  </table>
+  <hr class="divider">
+  <div class="input-row">
+    <select id="sync-app-select"></select>
+    <button class="btn btn-primary" onclick="syncApp()">⚡ Force Sync App</button>
+    <button class="btn btn-success" onclick="syncApp('root')">🚀 Sync All (root)</button>
+  </div>
+  <div id="sync-result" class="result-box" style="display:none"></div>
+</div>
+
+<!-- ═══════════════════ RBAC ═══════════════════ -->
+<div id="rbac" class="section">
+  <h2>🔐 RBAC Permission Check</h2>
+  <p style="color:var(--muted);font-size:14px;margin-bottom:20px">
+    Kiểm tra 4 lệnh <code>kubectl auth can-i</code> theo đề bài Lab 1.1
+  </p>
+  <button class="btn btn-primary" onclick="checkRbac()" id="rbac-btn">▶ Run All Checks</button>
+  <br><br>
+  <table id="rbac-table" style="display:none">
+    <thead><tr><th>User</th><th>Action</th><th>Resource</th><th>Namespace</th><th>Expected</th><th>Result</th><th>Status</th></tr></thead>
+    <tbody id="rbac-body"></tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════ GATEKEEPER ═══════════════════ -->
+<div id="gatekeeper" class="section">
+  <h2>🛡️ Gatekeeper Policy Tests</h2>
+  <p style="color:var(--muted);font-size:14px;margin-bottom:20px">
+    Thử apply manifest vi phạm — Gatekeeper phải chặn (dry-run server)
+  </p>
+  <div class="test-grid">
+    <div class="test-card">
+      <h4>🏷️ Test 1 — Cấm image :latest</h4>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Deploy nginx:latest → phải bị reject</p>
+      <button class="btn btn-warning btn-sm" onclick="testGatekeeper('latest','gk-r1')">▶ Run Test</button>
+      <div id="gk-r1" class="result-box" style="display:none;min-height:60px"></div>
+    </div>
+    <div class="test-card">
+      <h4>📊 Test 2 — Bắt buộc resource limits</h4>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Deploy không có limits → phải bị reject</p>
+      <button class="btn btn-warning btn-sm" onclick="testGatekeeper('no-limits','gk-r2')">▶ Run Test</button>
+      <div id="gk-r2" class="result-box" style="display:none;min-height:60px"></div>
+    </div>
+    <div class="test-card">
+      <h4>🏭 Test 3 — Whitelist Registry</h4>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Deploy từ DockerHub → phải bị reject</p>
+      <button class="btn btn-warning btn-sm" onclick="testGatekeeper('bad-registry','gk-r3')">▶ Run Test</button>
+      <div id="gk-r3" class="result-box" style="display:none;min-height:60px"></div>
+    </div>
+    <div class="test-card">
+      <h4>🌐 Test 4 — Cấm hostNetwork</h4>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Deploy hostNetwork:true → phải bị reject</p>
+      <button class="btn btn-warning btn-sm" onclick="testGatekeeper('host-network','gk-r4')">▶ Run Test</button>
+      <div id="gk-r4" class="result-box" style="display:none;min-height:60px"></div>
+    </div>
+  </div>
+  <button class="btn btn-primary" onclick="runAllGatekeeper()">▶▶ Run All Tests</button>
+</div>
+
+<!-- ═══════════════════ CANARY ═══════════════════ -->
+<div id="canary" class="section">
+  <h2>🐦 Canary Rollout Control</h2>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Rollout Status</div>
+      <div id="canary-phase" style="font-size:22px;font-weight:700;margin:8px 0">—</div>
+      <div style="font-size:13px;color:var(--muted)" id="canary-replicas">—</div>
+      <div class="canary-bar"><div class="canary-fill" id="canary-bar" style="width:0%"></div></div>
+      <div style="font-size:12px;color:var(--muted)" id="canary-step-info">—</div>
+      <br>
+      <button class="btn btn-ghost btn-sm" onclick="loadCanary()">🔄 Refresh Status</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Inject Error Rate</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+        Thay đổi % request lỗi để test canary analysis
+      </p>
+      <div class="input-row">
+        <input type="range" min="0" max="1" step="0.05" value="0" id="error-slider"
+               oninput="document.getElementById('error-val').textContent=Math.round(this.value*100)+'%'">
+        <span class="range-val" id="error-val">0%</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px">
+        0% = không lỗi &nbsp;|&nbsp; 10% = SLO alert &nbsp;|&nbsp; 15%+ = canary rollback
+      </div>
+      <div class="input-row">
+        <button class="btn btn-success" onclick="setErrorRate()">✅ Set 0% (healthy)</button>
+        <button class="btn btn-warning" onclick="setErrorRateVal(0.10)">⚠️ 10% (SLO alert)</button>
+        <button class="btn btn-danger"  onclick="setErrorRateVal(0.15)">💥 15% (rollback)</button>
+      </div>
+      <div id="canary-result" class="result-box" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ PODS ═══════════════════ -->
+<div id="pods" class="section">
+  <h2>📦 All Pods
+    <button class="btn btn-ghost btn-sm" onclick="loadStatus()">🔄 Refresh</button>
+  </h2>
+  <div class="input-row">
+    <select id="ns-filter" onchange="filterPods()">
+      <option value="">All Namespaces</option>
+      <option value="demo">demo</option>
+      <option value="argocd">argocd</option>
+      <option value="monitoring">monitoring</option>
+      <option value="gatekeeper-system">gatekeeper-system</option>
+      <option value="argo-rollouts">argo-rollouts</option>
+    </select>
+  </div>
+  <table>
+    <thead><tr><th>Pod Name</th><th>Namespace</th><th>Status</th><th>Ready</th><th>Logs</th></tr></thead>
+    <tbody id="pods-table"><tr><td colspan="5" style="color:var(--muted)">Loading...</td></tr></tbody>
+  </table>
+  <div id="log-box" style="display:none">
+    <hr class="divider">
+    <h2>📋 Pod Logs: <span id="log-pod-name" style="color:var(--primary)"></span></h2>
+    <div id="log-content" class="result-box" style="color:var(--text)"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SLO & ALERTS ═══════════════════ -->
+<div id="slo" class="section">
+  <h2>📊 SLO & Alerting
+    <button class="btn btn-ghost btn-sm" onclick="loadSlo()">🔄 Refresh</button>
+  </h2>
+
+  <!-- Metric cards -->
+  <div class="grid-3" style="margin-bottom:24px">
+    <div class="card" id="slo-sr-card">
+      <div class="card-title">Success Rate (5m)</div>
+      <div class="card-value" id="slo-sr" style="font-size:32px">—</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">SLO threshold: 95%</div>
+      <div class="canary-bar" style="margin-top:10px"><div class="canary-fill" id="slo-bar" style="width:0%"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Request Rate (RPS)</div>
+      <div class="card-value" id="slo-rps" style="color:var(--primary)">—</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">requests/second</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Error Rate</div>
+      <div class="card-value" id="slo-err" style="color:var(--danger)">—</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">% request 5xx</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Latency P99</div>
+      <div class="card-value" id="slo-p99" style="color:var(--warning)">—</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">seconds</div>
+    </div>
+    <div class="card" style="grid-column:span 2">
+      <div class="card-title">Active Alerts</div>
+      <div id="slo-alerts-inline" style="margin-top:8px;font-size:14px;color:var(--muted)">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Success rate chart -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="card-title" style="margin-bottom:12px">Success Rate — Last 10 minutes</div>
+    <canvas id="slo-chart" height="80"></canvas>
+  </div>
+
+  <!-- Active alerts table -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="card-title" style="margin-bottom:12px">Firing Alerts</div>
+    <table>
+      <thead><tr><th>Alert</th><th>Severity</th><th>State</th><th>Description</th></tr></thead>
+      <tbody id="alerts-table"><tr><td colspan="4" style="color:var(--muted)">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- Trigger test -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:12px">🧪 Trigger SLO Alert Test</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+      Set ERROR_RATE cao → success rate xuống dưới 95% → Prometheus fire SLOViolation → AlertManager gửi email đến <strong>thanhtrung8ctv@gmail.com</strong>
+    </p>
+    <div class="input-row">
+      <button class="btn btn-warning" onclick="triggerSloTest(0.10)">
+        ⚠️ Test 10% Error → SLO Alert Email
+      </button>
+      <button class="btn btn-danger" onclick="triggerSloTest(0.15)">
+        💥 Test 15% Error → Canary Rollback
+      </button>
+      <button class="btn btn-success" onclick="triggerSloTest(0)">
+        ✅ Reset 0% Error → Healthy
+      </button>
+    </div>
+    <div id="slo-trigger-result" class="result-box" style="display:none;margin-top:12px"></div>
+    <div style="margin-top:12px;padding:12px;background:#0d1117;border-radius:8px;font-size:12px;color:var(--muted)">
+      📌 <strong>Luồng:</strong> Set ERROR_RATE → API trả 500 → Prometheus scrape /metrics
+      → <code>api:success_rate:5m &lt; 0.95</code> trong 2 phút → AlertManager gửi email
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ GIT ═══════════════════ -->
+<div id="git" class="section">
+  <h2>📝 Git Commit History</h2>
+  <button class="btn btn-primary" onclick="loadGit()">🔄 Load Commits</button>
+  <div id="git-log" class="result-box" style="margin-top:16px;color:var(--text)">Click Load để xem...</div>
+</div>
+
+</main>
+</div>
+
+<script>
+let allPods = [];
+let allApps = [];
+
+// ── Navigation ──────────────────────────────────────────────────────────────
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (id === 'argocd')     loadApps();
+  if (id === 'canary')     loadCanary();
+  if (id === 'pods')       loadStatus();
+  if (id === 'git')        loadGit();
+  if (id === 'overview')   loadOverview();
+  if (id === 'slo')        loadSlo();
+}
+
+function toast(msg, color='var(--success)') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.borderColor = color;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function refreshAll() { loadOverview(); loadApps(); loadStatus(); loadCanary(); }
+
+// ── Overview ────────────────────────────────────────────────────────────────
+async function loadOverview() {
+  const r = await fetch('/api/status').then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  allApps = r.applications || [];
+  allPods = r.pods || [];
+  document.getElementById('stat-apps').textContent    = allApps.length;
+  document.getElementById('stat-healthy').textContent = allApps.filter(a=>a.health==='Healthy').length;
+  document.getElementById('stat-pods').textContent    = allPods.filter(p=>p.status==='Running').length + '/' + allPods.length;
+  document.getElementById('stat-nodes').textContent   = (r.nodes||[]).length;
+  if (r.rollout) {
+    document.getElementById('stat-rollout').textContent = r.rollout.status;
+    document.getElementById('stat-step').textContent = r.rollout.canary != null ? `Step ${r.rollout.canary}` : 'Done';
+  }
+  loadGitOverview();
+}
+
+async function loadGitOverview() {
+  const r = await fetch('/api/git/log').then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  document.getElementById('git-overview').textContent = r.commits.join('\n');
+}
+
+// ── ArgoCD Apps ─────────────────────────────────────────────────────────────
+async function loadApps() {
+  const r = await fetch('/api/status').then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  allApps = r.applications || [];
+  const tbody = document.getElementById('apps-table');
+  const sel   = document.getElementById('sync-app-select');
+  sel.innerHTML = allApps.map(a => `<option value="${a.name}">${a.name}</option>`).join('');
+  tbody.innerHTML = allApps.map(a => `
+    <tr>
+      <td><strong>${a.name}</strong></td>
+      <td>${syncBadge(a.sync)}</td>
+      <td>${healthBadge(a.health)}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="syncApp('${a.name}')">⚡ Sync</button></td>
+    </tr>`).join('');
+}
+
+function syncBadge(s) {
+  if (s==='Synced')    return `<span class="badge badge-success">✓ ${s}</span>`;
+  if (s==='OutOfSync') return `<span class="badge badge-warning">↻ ${s}</span>`;
+  return `<span class="badge badge-muted">${s}</span>`;
+}
+function healthBadge(h) {
+  if (h==='Healthy')     return `<span class="badge badge-success">● ${h}</span>`;
+  if (h==='Degraded')    return `<span class="badge badge-danger">✗ ${h}</span>`;
+  if (h==='Progressing') return `<span class="badge badge-warning">◌ ${h}</span>`;
+  return `<span class="badge badge-muted">${h}</span>`;
+}
+
+async function syncApp(name) {
+  const appName = name || document.getElementById('sync-app-select').value;
+  const box = document.getElementById('sync-result');
+  box.style.display = 'block';
+  box.textContent = `Syncing ${appName}...`;
+  const r = await fetch('/api/argocd/sync', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({app: appName})
+  }).then(r=>r.json());
+  box.textContent = r.ok ? `✓ ${appName} refresh triggered\n${r.out}` : `✗ Error: ${r.err}`;
+  box.className = 'result-box ' + (r.ok ? '' : 'error');
+  toast(r.ok ? `✓ Synced ${appName}` : `✗ Sync failed`, r.ok ? 'var(--success)':'var(--danger)');
+}
+
+// ── RBAC ────────────────────────────────────────────────────────────────────
+async function checkRbac() {
+  const btn = document.getElementById('rbac-btn');
+  btn.innerHTML = '<span class="spinner"></span> Running...';
+  btn.disabled = true;
+  const results = await fetch('/api/rbac/check').then(r=>r.json()).catch(()=>[]);
+  btn.innerHTML = '▶ Run All Checks'; btn.disabled = false;
+  const table = document.getElementById('rbac-table');
+  const tbody = document.getElementById('rbac-body');
+  table.style.display = 'table';
+  tbody.innerHTML = results.map(r => `
+    <tr>
+      <td><span class="tag">${r.user}</span></td>
+      <td>${r.verb}</td>
+      <td>${r.resource}</td>
+      <td>${r.namespace}</td>
+      <td>${r.expected ? '<span class="badge badge-success">yes</span>' : '<span class="badge badge-danger">no</span>'}</td>
+      <td>${r.actual  ? '<span class="badge badge-success">yes</span>' : '<span class="badge badge-danger">no</span>'}</td>
+      <td>${r.pass ? '✅ PASS' : '❌ FAIL'}</td>
+    </tr>`).join('');
+  const pass = results.filter(r=>r.pass).length;
+  toast(`RBAC: ${pass}/${results.length} passed`, pass===results.length ? 'var(--success)':'var(--danger)');
+}
+
+// ── Gatekeeper ───────────────────────────────────────────────────────────────
+async function testGatekeeper(type, resultId) {
+  const box = document.getElementById(resultId);
+  box.style.display = 'block';
+  box.textContent = 'Testing...'; box.className = 'result-box';
+  const r = await fetch('/api/gatekeeper/test', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({type})
+  }).then(r=>r.json());
+  box.className = 'result-box ' + (r.pass ? '' : 'error');
+  box.textContent = (r.pass ? '✅ BLOCKED (correct)\n' : '❌ NOT BLOCKED (policy failed)\n') + r.message;
+  toast(r.pass ? '✅ Policy working' : '❌ Policy failed', r.pass ? 'var(--success)':'var(--danger)');
+}
+
+async function runAllGatekeeper() {
+  for (const [type, id] of [['latest','gk-r1'],['no-limits','gk-r2'],['bad-registry','gk-r3'],['host-network','gk-r4']]) {
+    await testGatekeeper(type, id);
+    await new Promise(r => setTimeout(r, 500));
+  }
+}
+
+// ── Canary ──────────────────────────────────────────────────────────────────
+async function loadCanary() {
+  const r = await fetch('/api/canary/status').then(r=>r.json()).catch(()=>null);
+  if (!r || r.error) {
+    document.getElementById('canary-phase').textContent = r?.error || 'Error';
+    return;
+  }
+  document.getElementById('canary-phase').textContent    = r.phase;
+  document.getElementById('canary-replicas').textContent = `${r.readyReplicas}/${r.desiredReplicas} replicas ready`;
+  document.getElementById('canary-step-info').textContent = r.currentStep != null ? `Canary step: ${r.currentStep}` : 'Stable (no active canary)';
+  const pct = r.desiredReplicas > 0 ? Math.round(r.readyReplicas/r.desiredReplicas*100) : 0;
+  document.getElementById('canary-bar').style.width = pct + '%';
+}
+
+async function setErrorRate() {
+  const rate = parseFloat(document.getElementById('error-slider').value);
+  await setErrorRateVal(rate);
+}
+
+async function setErrorRateVal(rate) {
+  document.getElementById('error-slider').value = rate;
+  document.getElementById('error-val').textContent = Math.round(rate*100) + '%';
+  const box = document.getElementById('canary-result');
+  box.style.display = 'block';
+  box.textContent = `Setting ERROR_RATE=${rate}...`;
+  const r = await fetch('/api/canary/set-error-rate', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({rate})
+  }).then(r=>r.json());
+  box.className = 'result-box ' + (r.ok ? '' : 'error');
+  box.textContent = r.ok ? `✓ ERROR_RATE set to ${rate*100}%\n${r.out}` : `✗ ${r.err}`;
+  toast(r.ok ? `ERROR_RATE → ${rate*100}%` : 'Failed', r.ok ? 'var(--success)':'var(--danger)');
+  setTimeout(loadCanary, 2000);
+}
+
+// ── Pods ────────────────────────────────────────────────────────────────────
+async function loadStatus() {
+  const r = await fetch('/api/status').then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  allPods = r.pods || [];
+  renderPods(allPods);
+}
+
+function filterPods() {
+  const ns = document.getElementById('ns-filter').value;
+  renderPods(ns ? allPods.filter(p=>p.ns===ns) : allPods);
+}
+
+function renderPods(pods) {
+  document.getElementById('pods-table').innerHTML = pods.map(p => `
+    <tr>
+      <td><code style="font-size:12px">${p.name}</code></td>
+      <td><span class="tag">${p.ns}</span></td>
+      <td>${p.status==='Running' ? '<span class="badge badge-success">● Running</span>'
+           : p.status==='Pending' ? '<span class="badge badge-warning">◌ Pending</span>'
+           : `<span class="badge badge-danger">✗ ${p.status}</span>`}</td>
+      <td>${p.ready ? '✅' : '⏳'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="fetchLogs('${p.ns}','${p.name}')">📋 Logs</button></td>
+    </tr>`).join('') || '<tr><td colspan="5" style="color:var(--muted)">No pods found</td></tr>';
+}
+
+async function fetchLogs(ns, pod) {
+  document.getElementById('log-box').style.display = 'block';
+  document.getElementById('log-pod-name').textContent = pod;
+  document.getElementById('log-content').textContent = 'Loading...';
+  const r = await fetch(`/api/logs/${ns}/${pod}`).then(r=>r.json());
+  document.getElementById('log-content').textContent = r.ok ? r.logs : r.err;
+}
+
+// ── Git ──────────────────────────────────────────────────────────────────────
+async function loadGit() {
+  const r = await fetch('/api/git/log').then(r=>r.json());
+  document.getElementById('git-log').textContent = r.commits.join('\n');
+}
+
+// ── SLO & Alerts ─────────────────────────────────────────────────────────────
+let sloChart = null;
+
+async function loadSlo() {
+  loadSloMetrics();
+  loadAlerts();
+  loadSloHistory();
+}
+
+async function loadSloMetrics() {
+  const r = await fetch('/api/metrics/slo').then(r=>r.json()).catch(()=>null);
+  if (!r) { document.getElementById('slo-sr').textContent = 'N/A'; return; }
+
+  const sr  = r.success_rate;
+  const rps = r.rps;
+  const err = r.error_rate;
+  const p99 = r.p99;
+
+  // Success rate
+  if (sr !== null) {
+    const pct = (sr * 100).toFixed(1);
+    const el  = document.getElementById('slo-sr');
+    el.textContent = pct + '%';
+    el.style.color = sr >= 0.95 ? 'var(--success)' : sr >= 0.90 ? 'var(--warning)' : 'var(--danger)';
+    document.getElementById('slo-bar').style.width = Math.min(sr*100, 100) + '%';
+    document.getElementById('slo-bar').style.background =
+      sr >= 0.95 ? 'linear-gradient(90deg,var(--success),#00ff88)'
+    : sr >= 0.90 ? 'linear-gradient(90deg,var(--warning),#ffcc00)'
+    : 'linear-gradient(90deg,var(--danger),#ff6b6b)';
+    // inline summary
+    document.getElementById('slo-alerts-inline').innerHTML =
+      sr < 0.95
+      ? `<span style="color:var(--danger)">🔴 SLO VIOLATED — ${pct}% < 95% — AlertManager sẽ gửi email sau 2 phút</span>`
+      : `<span style="color:var(--success)">✅ SLO OK — ${pct}% ≥ 95%</span>`;
+  } else {
+    document.getElementById('slo-sr').textContent = 'No data';
+    document.getElementById('slo-alerts-inline').textContent = 'Chưa có metrics — API chưa nhận request nào';
+  }
+
+  document.getElementById('slo-rps').textContent = rps !== null ? rps.toFixed(3) : '—';
+  document.getElementById('slo-err').textContent = err !== null ? (err*100).toFixed(1)+'%' : '—';
+  document.getElementById('slo-p99').textContent = p99 !== null ? p99.toFixed(3)+'s' : '—';
+}
+
+async function loadAlerts() {
+  const r = await fetch('/api/metrics/alerts').then(r=>r.json()).catch(()=>null);
+  const tbody = document.getElementById('alerts-table');
+  if (!r || r.error) {
+    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--muted)">${r?.error || 'Cannot reach Prometheus'}</td></tr>`;
+    return;
+  }
+  if (r.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--success)">✅ No firing alerts</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = r.map(a => `
+    <tr>
+      <td><strong>${a.name}</strong></td>
+      <td>${a.severity === 'critical'
+        ? '<span class="badge badge-danger">🔴 critical</span>'
+        : '<span class="badge badge-warning">⚠️ '+a.severity+'</span>'}</td>
+      <td>${a.state === 'firing'
+        ? '<span class="badge badge-danger">🔥 firing</span>'
+        : '<span class="badge badge-warning">⏳ '+a.state+'</span>'}</td>
+      <td style="font-size:12px">${a.desc || a.summary}</td>
+    </tr>`).join('');
+}
+
+async function loadSloHistory() {
+  const r = await fetch('/api/metrics/history').then(r=>r.json()).catch(()=>null);
+  if (!r || r.error || !r.values.length) return;
+
+  const labels = r.values.map(v => {
+    const d = new Date(v[0]*1000);
+    return d.getHours()+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+  });
+  const data = r.values.map(v => (v[1]*100).toFixed(2));
+
+  const ctx = document.getElementById('slo-chart').getContext('2d');
+  if (sloChart) sloChart.destroy();
+
+  // simple canvas chart without Chart.js
+  const canvas = document.getElementById('slo-chart');
+  canvas.width  = canvas.parentElement.offsetWidth - 40;
+  canvas.height = 120;
+  const c = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const pad = {top:10, right:10, bottom:30, left:45};
+  const iw = w - pad.left - pad.right;
+  const ih = h - pad.top  - pad.bottom;
+
+  c.clearRect(0,0,w,h);
+  c.strokeStyle='#2a2d3e'; c.lineWidth=1;
+
+  // SLO line at 95%
+  const sloY = pad.top + ih * (1 - 0.95);
+  c.setLineDash([4,4]); c.strokeStyle='#ffa502';
+  c.beginPath(); c.moveTo(pad.left,sloY); c.lineTo(w-pad.right,sloY); c.stroke();
+  c.setLineDash([]);
+  c.fillStyle='#ffa502'; c.font='11px monospace';
+  c.fillText('95%', 2, sloY+4);
+
+  if (data.length < 2) return;
+  const mn = 80, mx = 100;
+  const xs = data.map((_,i) => pad.left + (i/(data.length-1))*iw);
+  const ys = data.map(v  => pad.top  + ih*(1-(Math.min(Math.max(v,mn),mx)-mn)/(mx-mn)));
+
+  // fill
+  const grad = c.createLinearGradient(0,pad.top,0,h-pad.bottom);
+  grad.addColorStop(0,'rgba(108,99,255,.4)');
+  grad.addColorStop(1,'rgba(108,99,255,.0)');
+  c.fillStyle = grad;
+  c.beginPath();
+  c.moveTo(xs[0], h-pad.bottom);
+  xs.forEach((x,i) => c.lineTo(x,ys[i]));
+  c.lineTo(xs[xs.length-1], h-pad.bottom);
+  c.closePath(); c.fill();
+
+  // line
+  c.strokeStyle='#6c63ff'; c.lineWidth=2; c.setLineDash([]);
+  c.beginPath();
+  xs.forEach((x,i) => i===0 ? c.moveTo(x,ys[i]) : c.lineTo(x,ys[i]));
+  c.stroke();
+
+  // x labels (every ~5)
+  c.fillStyle='#64748b'; c.font='10px monospace';
+  labels.forEach((l,i) => {
+    if (i % Math.max(1,Math.floor(labels.length/6)) === 0)
+      c.fillText(l, xs[i]-14, h-8);
+  });
+}
+
+async function triggerSloTest(rate) {
+  const box = document.getElementById('slo-trigger-result');
+  box.style.display = 'block';
+  box.className = 'result-box';
+  box.textContent = `Setting ERROR_RATE=${rate*100}%...`;
+
+  const r = await fetch('/api/canary/set-error-rate', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({rate})
+  }).then(r=>r.json());
+
+  if (!r.ok) { box.textContent = '✗ ' + r.err; box.className='result-box error'; return; }
+
+  const msgs = {
+    0.10: `✅ ERROR_RATE = 10% đã set\n\n→ API sẽ trả ~10% request lỗi 500\n→ success_rate sẽ xuống ~90% sau 2-3 phút\n→ 90% < 95% SLO threshold\n→ Prometheus fire alert SLOViolation\n→ Chờ 2 phút → AlertManager gửi email đến thanhtrung8ctv@gmail.com\n\nBấm Refresh để theo dõi metrics thay đổi.`,
+    0.15: `✅ ERROR_RATE = 15% đã set\n\n→ API sẽ trả ~15% request lỗi 500\n→ success_rate ~85% < 90% (canary threshold)\n→ AnalysisRun sẽ fail\n→ Argo Rollouts tự động ROLLBACK\n→ Đồng thời SLO alert cũng fire → email\n\nBấm Refresh để theo dõi rollout rollback.`,
+    0:    `✅ ERROR_RATE = 0% — App trở về healthy\n\n→ success_rate sẽ tăng về 100%\n→ Alert tự resolve sau vài phút\n→ AlertManager gửi email "resolved"\n\nMọi thứ bình thường trở lại.`,
+  };
+  box.textContent = msgs[rate] || `✅ ERROR_RATE set to ${rate*100}%`;
+  toast(rate === 0 ? '✅ Reset healthy' : `⚠️ ERROR_RATE = ${rate*100}%`,
+        rate === 0 ? 'var(--success)' : rate >= 0.15 ? 'var(--danger)' : 'var(--warning)');
+
+  setTimeout(loadSlo, 3000);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+loadOverview();
+setInterval(loadOverview, 30000);
+</script>
+</body>
+</html>

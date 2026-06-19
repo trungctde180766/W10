@@ -1,0 +1,6 @@
+# .trivyignore — CVE exceptions có thời hạn
+# Format: CVE-ID  # comment lý do + ngày hết hạn
+# Xem thêm: runbooks/exception-adr.md để ghi ADR đầy đủ
+#
+# Ví dụ (bỏ comment khi cần):
+# CVE-2023-XXXXX  # vendor chưa có patch, review lại 2024-12-31

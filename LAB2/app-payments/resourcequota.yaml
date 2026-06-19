@@ -1,0 +1,48 @@
+# LAB 2.3 - ResourceQuota + LimitRange cho namespace payments
+# ResourceQuota: ngân sách tổng CPU/RAM cho cả namespace
+# LimitRange: default limits cho pod không khai báo (Gatekeeper vẫn sẽ block nếu thiếu)
+#
+# Kiểm chứng:
+#   Pod xin RAM vượt quota → bị từ chối
+#   Pod không khai limits → LimitRange tự inject default → vẫn chạy được
+
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: payments-quota
+  namespace: payments
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 2Gi
+    limits.cpu: "4"
+    limits.memory: 4Gi
+    pods: "20"
+    services: "10"
+
+---
+# LimitRange: default cho pod không khai báo limits
+# Gatekeeper K8sRequireLimits vẫn enforce → pod phải khai tường minh
+# LimitRange là "lưới an toàn" nếu Gatekeeper chưa chạy kịp
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: payments-limitrange
+  namespace: payments
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: 200m
+      memory: 256Mi
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    max:
+      cpu: "1"
+      memory: 1Gi

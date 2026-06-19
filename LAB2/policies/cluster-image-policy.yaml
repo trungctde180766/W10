@@ -1,0 +1,25 @@
+# LAB 2.2 - ClusterImagePolicy
+# Chỉ cho phép image đã được ký bằng cosign key-based
+# Enforce trên namespace có label: policy.sigstore.dev/include=true
+# → gắn label cho ns demo và payments sau khi test pass
+#
+# Cách gắn label namespace:
+#   kubectl label ns demo policy.sigstore.dev/include=true
+#   kubectl label ns payments policy.sigstore.dev/include=true
+apiVersion: policy.sigstore.dev/v1beta1
+kind: ClusterImagePolicy
+metadata:
+  name: require-signed-images
+spec:
+  images:
+  # Áp dụng cho tất cả image từ ghcr.io của repo này
+  - glob: "ghcr.io/trungctde180766/**"
+  authorities:
+  - key:
+      # Public key từ file signing/cosign.pub (commit vào repo)
+      # Private key giữ trong GitHub Secret: COSIGN_KEY + COSIGN_PASSWORD
+      data: |
+        -----BEGIN PUBLIC KEY-----
+        MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE1zRF+IH8JhgjYdsmdijYiA7xbTsa
+        YKetwQJZH2HfTtV5xX8I3GaZS+oBNAqvCUZq8znraltPqueAjv1xkeKFLQ==
+        -----END PUBLIC KEY-----
